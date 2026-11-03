@@ -34,3 +34,25 @@ jobs:
 
       - name: Run Build and QEMU Test
         run: docker run --rm -v ${{ github.workspace }}:/app os-builder make run
+
+      - name: Send Discord Notification on Success
+        if: success() && env.DISCORD_WEBHOOK != ''
+        uses: discord-actions/message@v2
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          text: |
+            🟢 **GitHub ActionsでのOSビルド＆テストが成功しました！**
+            • **ブランチ:** `${{ github.ref_name }}`
+            • **コミット:** ${{ github.event.head_commit.message }}
+            • **詳細ログ:** https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Send Discord Notification on Failure
+        if: failure() && env.DISCORD_WEBHOOK != ''
+        uses: discord-actions/message@v2
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          text: |
+            ❌ **警告: GitHub Actionsでのビルドまたはテストが失敗しました。**
+            • **ブランチ:** `${{ github.ref_name }}`
+            • **コミット:** ${{ github.event.head_commit.message }}
+            • **詳細ログ:** https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
