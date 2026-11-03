@@ -61,6 +61,7 @@ run: img
 		-machine q35 \
 		-m 1G \
 		-serial stdio \
+    	-display none
 		-net none
 
 clean:
