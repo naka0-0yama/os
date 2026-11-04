@@ -71,7 +71,7 @@ pub fn init(magic: u32, multiboot_info_addr: usize) {
         }
         if tag.tag_type == TAG_TYPE_FRAMEBUFFER {
             let fb = unsafe { &*((multiboot_info_addr + offset) as *const FramebufferTag) };
-            
+
             unsafe {
                 console::init(
                     fb.address as *mut u32,
@@ -86,7 +86,7 @@ pub fn init(magic: u32, multiboot_info_addr: usize) {
             break;
         }
         if tag.tag_type == TAG_TYPE_MEMMMAP {
-            let efi_mmap_tag = unsafe { &*((multiboot_info_addr + offset) as *const MemmapTag)};
+            let efi_mmap_tag = unsafe { &*((multiboot_info_addr + offset) as *const MemmapTag) };
             let desc_size = efi_mmap_tag.descriptor_size as usize;
             let header_size = core::mem::size_of::<MemmapTag>();
             let desc_count = (efi_mmap_tag.size as usize - header_size) / desc_size;
@@ -95,10 +95,14 @@ pub fn init(magic: u32, multiboot_info_addr: usize) {
 
             println!("--- UEFI Memory Map ---");
             for _ in 0..desc_count {
-                let desc = unsafe {*desc_ptr};
+                let desc = unsafe { *desc_ptr };
 
                 let is_ram = desc.ty == 7;
-                let type_str = if is_ram { "RAM (Conventional)" } else { "Reserved/Other" };
+                let type_str = if is_ram {
+                    "RAM (Conventional)"
+                } else {
+                    "Reserved/Other"
+                };
 
                 let length = desc.page_count * 4096;
                 println!(

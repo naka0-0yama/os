@@ -1,5 +1,5 @@
-use core::fmt;
 use crate::font::FONT8X8_BASIC;
+use core::fmt;
 pub struct Console {
     fb_ptr: *mut u32,
     width: usize,
@@ -39,9 +39,7 @@ impl Console {
             return;
         }
         let glyph = FONT8X8_BASIC[c as usize];
-        for row in 0..8 {
-            let bits = glyph[row];
-
+        for (row, &bits) in glyph.iter().enumerate() {
             for col in 0..8 {
                 if (bits >> col) & 1 == 1 {
                     for dy in 0..scale {
@@ -69,30 +67,28 @@ impl Console {
         self.y_pos = 0;
     }
 
-
     fn write_char(&mut self, c: char) {
-    // 1. end of line next line
-    if self.x_pos + 8 > self.width {
-        self.x_pos = 0;
-        self.y_pos += 16;
-    }
+        // 1. end of line next line
+        if self.x_pos + 8 > self.width {
+            self.x_pos = 0;
+            self.y_pos += 16;
+        }
 
-    // 2. end of screen
-    if self.y_pos + 16 > self.height {
-        // self.y_pos = 0;
-        self.clear();
-    }
+        // 2. end of screen
+        if self.y_pos + 16 > self.height {
+            // self.y_pos = 0;
+            self.clear();
+        }
 
-    if c == '\n' {
-        self.x_pos = 0;
-        self.y_pos += 16;
-    } else {
-        self.draw_char(self.x_pos, self.y_pos, c, 1);
-        self.x_pos += 8;
+        if c == '\n' {
+            self.x_pos = 0;
+            self.y_pos += 16;
+        } else {
+            self.draw_char(self.x_pos, self.y_pos, c, 1);
+            self.x_pos += 8;
+        }
     }
 }
-}
-
 
 // format output
 impl fmt::Write for Console {
@@ -103,7 +99,6 @@ impl fmt::Write for Console {
         Ok(())
     }
 }
-
 
 static mut CONSOLE: Console = Console::new();
 
@@ -126,7 +121,6 @@ pub unsafe fn init(fb_ptr: *mut u32, width: usize, height: usize) {
             .init(fb_ptr, width, height);
     }
 }
-
 
 #[macro_export]
 macro_rules! print {

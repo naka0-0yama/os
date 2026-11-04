@@ -8,7 +8,6 @@ mod font;
 
 use crate::arch::x86_64::boot;
 
-
 #[unsafe(no_mangle)]
 pub extern "C" fn rust_main(magic: u32, multiboot_info_addr: usize) -> ! {
     boot::init(magic, multiboot_info_addr);
