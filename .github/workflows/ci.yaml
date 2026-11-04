@@ -39,8 +39,8 @@ jobs:
         if: success()
         uses: discord-actions/message@v2
         with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          text: |
+          webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          message: |
             🟢 **GitHub ActionsでのOSビルド＆テストが成功しました！**
             • **ブランチ:** `${{ github.ref_name }}`
             • **コミット:** ${{ github.event.head_commit.message }}
@@ -50,8 +50,8 @@ jobs:
         if: failure()
         uses: discord-actions/message@v2
         with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          text: |
+          webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          message: |
             ❌ **警告: GitHub Actionsでのビルドまたはテストが失敗しました。**
             • **ブランチ:** `${{ github.ref_name }}`
             • **コミット:** ${{ github.event.head_commit.message }}
