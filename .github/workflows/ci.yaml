@@ -36,7 +36,7 @@ jobs:
         run: docker run --rm -v ${{ github.workspace }}:/app os-builder make run
 
       - name: Send Discord Notification on Success
-        if: success() && env.DISCORD_WEBHOOK != ''
+        if: success()
         uses: discord-actions/message@v2
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -47,7 +47,7 @@ jobs:
             • **詳細ログ:** https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
       - name: Send Discord Notification on Failure
-        if: failure() && env.DISCORD_WEBHOOK != ''
+        if: failure()
         uses: discord-actions/message@v2
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
