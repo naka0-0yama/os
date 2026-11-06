@@ -60,6 +60,17 @@ run: img
 		-device usb-mouse,bus=xhci.0 \
 		-machine q35 \
 		-m 1G \
+		-net none
+
+run_nographic: img
+	qemu-system-x86_64 \
+		-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
+		-drive if=pflash,format=raw,file=$(OVMF_VARS) \
+		-drive file=os.img,format=raw \
+		-device qemu-xhci,id=xhci \
+		-device usb-mouse,bus=xhci.0 \
+		-machine q35 \
+		-m 1G \
 		-serial stdio \
     	-display none
 		-net none

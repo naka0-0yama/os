@@ -33,7 +33,7 @@ jobs:
         run: docker run --rm -v ${{ github.workspace }}:/os os-builder cargo clippy --target x86_64-unknown-none -- -D warnings
 
       - name: Run Build and QEMU Test
-        run: docker run --rm -v ${{ github.workspace }}:/app os-builder make run
+        run: docker run --rm -v ${{ github.workspace }}:/app os-builder make run_nographic
 
       - name: Send Discord Notification on Success
         if: success()
