@@ -6,4 +6,5 @@ rustflags = [
     "-C", "link-arg=-Tsrc/arch/x86_64/linker.ld",
     "-C", "relocation-model=static",
     "-C", "link-arg=-no-pie",
+    "-C", "no-redzone=yes",
 ]

@@ -1,35 +1,48 @@
-use std::process::Command;
 use std::env;
-use std::path::Path;
+use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=src/arch/x86_64/boot.asm");
+    println!("cargo:rerun-if-changed=src/arch/x86_64/idt/idt.asm");
     println!("cargo:rerun-if-changed=src/arch/x86_64/linker.ld");
 
     let out_dir = env::var("OUT_DIR").unwrap();
+
     let boot_o = format!("{}/boot.o", out_dir);
     let libboot_a = format!("{}/libboot.a", out_dir);
 
+    let idt_o = format!("{}/idt.o", out_dir);
+    let libidt_a = format!("{}/libidt.a", out_dir);
 
     let nasm_status = Command::new("nasm")
-        .args(&["-f", "elf64", "src/arch/x86_64/boot.asm", "-o", &boot_o])
+        .args(["-f", "elf64", "src/arch/x86_64/boot.asm", "-o", &boot_o])
         .status()
         .expect("Failed to execute nasm. Is it installed?");
 
-    if !nasm_status.success() {
+    let nasm_status_idt = Command::new("nasm")
+        .args(["-f", "elf64", "src/arch/x86_64/idt/idt.asm", "-o", &idt_o])
+        .status()
+        .expect("Failed to execute nasm. Is it installed?");
+
+    if !nasm_status.success() || !nasm_status_idt.success() {
         panic!("nasm compilation failed");
     }
 
-
     let ar_status = Command::new("ar")
-        .args(&["rcs", &libboot_a, &boot_o])
+        .args(["rcs", &libboot_a, &boot_o])
         .status()
         .expect("Failed to execute ar.");
 
-    if !ar_status.success() {
+    let ar_status_idt = Command::new("ar")
+        .args(["rcs", &libidt_a, &idt_o])
+        .status()
+        .expect("Failed to execute ar.");
+
+    if !ar_status.success() || !ar_status_idt.success() {
         panic!("ar archiving failed");
     }
 
     println!("cargo:rustc-link-search=native={}", out_dir);
     println!("cargo:rustc-link-lib=static=boot");
+    println!("cargo:rustc-link-lib=static=idt");
 }
