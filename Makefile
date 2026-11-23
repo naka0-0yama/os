@@ -60,7 +60,9 @@ run: img
 		-device usb-mouse,bus=xhci.0 \
 		-machine q35 \
 		-m 1G \
-		-net none
+		-net none \
+		-d int,cpu_reset -D qemu.log \
+		-no-reboot
 
 run_nographic: img
 	qemu-system-x86_64 \
@@ -72,7 +74,7 @@ run_nographic: img
 		-machine q35 \
 		-m 1G \
 		-serial stdio \
-    	-display none
+    	-display none \
 		-net none
 
 clean:
