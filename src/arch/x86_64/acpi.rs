@@ -9,7 +9,6 @@ const SLP_EN: u16 = 1 << 13;
 const ADDR_SPACE_SYSTEM_MEMORY: u8 = 0;
 const ADDR_SPACE_SYSTEM_IO: u8 = 1;
 
-
 #[repr(C, packed)]
 #[derive(Clone, Copy)]
 pub struct AcpiHeader {
@@ -32,7 +31,8 @@ pub struct GenericAddressStructure {
     pub access_size: u8,
     pub address: u64,
 }
-#[repr(C,packed)]
+#[allow(clippy::upper_case_acronyms)]
+#[repr(C, packed)]
 #[derive(Clone, Copy)]
 pub struct FADT {
     pub header: AcpiHeader,
@@ -113,11 +113,10 @@ pub struct S5Values {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum ControlReg {
+pub enum ControlReg {
     IoPort(u16),
     Mmio(u64),
 }
-
 
 #[derive(Clone, Copy, Debug)]
 pub struct AcpiShutdownInfo {
@@ -180,10 +179,10 @@ pub fn halt_forever() -> ! {
 pub fn find_s5_value(dsdt_bytes: &[u8]) -> Option<S5Values> {
     let mut i = 0;
     while i + 4 <= dsdt_bytes.len() {
-        if &dsdt_bytes[i..i+4] == b"_S5_" {
-            if let Some(vals) = parse_s5_after_name(&dsdt_bytes[i+4..]) {
-                return Some(vals);
-            }
+        if &dsdt_bytes[i..i + 4] == b"_S5_"
+            && let Some(vals) = parse_s5_after_name(&dsdt_bytes[i + 4..])
+        {
+            return Some(vals);
         }
         i += 1;
     }
@@ -230,7 +229,6 @@ fn parse_s5_after_name(mut rest: &[u8]) -> Option<S5Values> {
     })
 }
 
-
 fn skip_pkg_length(buf: &[u8]) -> Option<usize> {
     let lead = *buf.first()?;
     let extra_bytes = ((lead >> 6) & 0x03) as usize;
@@ -244,7 +242,6 @@ fn skip_pkg_length(buf: &[u8]) -> Option<usize> {
 fn parse_aml_integer(buf: &[u8]) -> Option<(u8, &[u8])> {
     let op = *buf.first()?;
     match op {
-
         0x00 => Some((0, &buf[1..])),
 
         0x01 => Some((1, &buf[1..])),
@@ -279,7 +276,7 @@ unsafe fn read_dsdt_bytes<'a>(dsdt_paddr: u64) -> Option<&'a [u8]> {
     }
 
     let hdr_ptr = dsdt_paddr as *const AcpiHeader;
-    let hdr = core::ptr::read_unaligned(hdr_ptr);
+    let hdr = unsafe { core::ptr::read_unaligned(hdr_ptr) };
     if &hdr.signature != b"DSDT" {
         return None;
     }
@@ -291,9 +288,8 @@ unsafe fn read_dsdt_bytes<'a>(dsdt_paddr: u64) -> Option<&'a [u8]> {
     }
 
     // DSDT全体（ヘッダ + AMLバイト列）をスライス化
-    Some(core::slice::from_raw_parts(dsdt_paddr as *const u8, len))
+    unsafe { Some(core::slice::from_raw_parts(dsdt_paddr as *const u8, len)) }
 }
-
 
 /// FADT から PM1a 制御レジスタのアクセス先を取得する
 fn get_pm1a_control_reg(facp: &FADT) -> Option<ControlReg> {
@@ -340,29 +336,33 @@ fn get_pm1b_control_reg(facp: &FADT) -> Option<ControlReg> {
 }
 
 /// x86 16bit I/O ポート読み込み（outw 時に既存ビットを温存したい場合用）
-unsafe fn inw(port: u16) -> u16 {
+fn inw(port: u16) -> u16 {
     let val: u16;
-    core::arch::asm!(
-        "in ax, dx",
-        in("dx") port,
-        out("ax") val,
-        options(nomem, nostack, preserves_flags)
-    );
+    unsafe {
+        core::arch::asm!(
+            "in ax, dx",
+            in("dx") port,
+            out("ax") val,
+            options(nomem, nostack, preserves_flags)
+        );
+    }
     val
 }
 
 /// x86 16bit I/O ポート書き込み
-unsafe fn outw(port: u16, val: u16) {
-    core::arch::asm!(
-        "out dx, ax",
-        in("dx") port,
-        in("ax") val,
-        options(nomem, nostack, preserves_flags)
-    );
+fn outw(port: u16, val: u16) {
+    unsafe {
+        core::arch::asm!(
+            "out dx, ax",
+            in("dx") port,
+            in("ax") val,
+            options(nomem, nostack, preserves_flags)
+        );
+    }
 }
 
 /// 制御レジスタに 16bit 値を書き込む（MMIO を使う場合はページング有効範囲/HHDM に注意）
-unsafe fn write_pm1_control(reg: ControlReg, slp_typ: u8) {
+fn write_pm1_control(reg: ControlReg, slp_typ: u8) {
     let typ_bits = ((slp_typ as u16) & SLP_TYP_MASK) << SLP_TYP_SHIFT;
 
     match reg {
@@ -376,43 +376,12 @@ unsafe fn write_pm1_control(reg: ControlReg, slp_typ: u8) {
             // 現在のページングがアイデンティティマッピング前提の例
             // HHDM を使う場合は paddr + hhdm_offset に変換してください
             let ptr = paddr as *mut u16;
-            let cur = core::ptr::read_volatile(ptr);
+            let cur = unsafe { core::ptr::read_volatile(ptr) };
             let next = (cur & !(SLP_TYP_MASK << SLP_TYP_SHIFT)) | typ_bits | SLP_EN;
-            core::ptr::write_volatile(ptr, next);
+            unsafe { core::ptr::write_volatile(ptr, next) };
         }
     }
 }
-
-/// ACPI S5 シャットダウンを実行する
-pub fn acpi_shutdown(facp: &FADT, s5: S5Values) -> ! {
-    let pm1a = get_pm1a_control_reg(facp);
-    let pm1b = get_pm1b_control_reg(facp);
-
-    println!(
-        "ACPI Shutdown: PM1a={:?} (SLP_TYPa={}), PM1b={:?} (SLP_TYPb={})",
-        pm1a, s5.slp_typ_a, pm1b, s5.slp_typ_b
-    );
-
-    unsafe {
-        // 割り込みを無効化してスリープ遷移中の割り込み介入を防ぐ
-        core::arch::asm!("cli", options(nomem, nostack));
-
-        if let Some(reg_a) = pm1a {
-            write_pm1_control(reg_a, s5.slp_typ_a);
-        }
-        if let Some(reg_b) = pm1b {
-            write_pm1_control(reg_b, s5.slp_typ_b);
-        }
-    }
-
-    // シャットダウン完了までの待機・フォールバックループ
-    loop {
-        unsafe {
-            core::arch::asm!("hlt", options(nomem, nostack));
-        }
-    }
-}
-
 
 pub fn parse_xsdt(xsdt_addr: u64) {
     let header_ptr = xsdt_addr as *const AcpiHeader;
@@ -426,14 +395,17 @@ pub fn parse_xsdt(xsdt_addr: u64) {
 
     let entry_count = (length - header_size) / 8;
 
-    let pointers_ptr =  (xsdt_addr as usize + header_size) as * const u64;
+    let pointers_ptr = (xsdt_addr as usize + header_size) as *const u64;
     println!("--- Parsing XSDT (Entries: {}) ---", entry_count);
     for i in 0..entry_count {
         let table_paddr = unsafe { core::ptr::read_unaligned(pointers_ptr.add(i)) };
-        
+
         // 【重要】4GB以上（0x100000000以上）または 0 のアドレスは現在のページング外なのでスキップする
         if table_paddr == 0 || table_paddr >= 0x1_0000_0000 {
-            println!("  [{}] Skipping out-of-range address: 0x{:x}", i, table_paddr);
+            println!(
+                "  [{}] Skipping out-of-range address: 0x{:x}",
+                i, table_paddr
+            );
             continue;
         }
 
@@ -442,18 +414,24 @@ pub fn parse_xsdt(xsdt_addr: u64) {
         let sig = table_header.signature;
 
         let sig_str = core::str::from_utf8(&sig).unwrap_or("????");
-        println!("  [{}] Table Signature: {}, Address: 0x{:x}", i, sig_str, table_paddr);
+        println!(
+            "  [{}] Table Signature: {}, Address: 0x{:x}",
+            i, sig_str, table_paddr
+        );
 
         if sig == *b"FACP" {
             println!("  [{}] Found FADT at address: 0x{:x}", i, table_paddr);
             let facp_ptr = table_paddr as *const FADT;
-            let facp = unsafe { core::ptr::read_unaligned(facp_ptr)};
+            let facp = unsafe { core::ptr::read_unaligned(facp_ptr) };
             let dsdt_paddr = get_dsdt_paddr(&facp);
             println!("  [{}] DSDT Physical Address: 0x{:x}", i, dsdt_paddr);
 
-            if let Some(dsdt_bytes) = unsafe {read_dsdt_bytes(dsdt_paddr)} {
+            if let Some(dsdt_bytes) = unsafe { read_dsdt_bytes(dsdt_paddr) } {
                 if let Some(s5) = find_s5_value(dsdt_bytes) {
-                    println!("  [{}] Found _S5_ values: SLP_TYPa = {}, SLP_TYPb = {}", i, s5.slp_typ_a, s5.slp_typ_b);
+                    println!(
+                        "  [{}] Found _S5_ values: SLP_TYPa = {}, SLP_TYPb = {}",
+                        i, s5.slp_typ_a, s5.slp_typ_b
+                    );
                     let val_a = (((s5.slp_typ_a as u16) & 0x7) << 10) | (1 << 13);
                     println!(
                         "  [{}] Found _S5_ values: SLP_TYPa = {}, SLP_TYPb = {} (PM1a write=0x{:04x})",
@@ -467,8 +445,7 @@ pub fn parse_xsdt(xsdt_addr: u64) {
                 } else {
                     println!("  [{}] _S5_ not found in DSDT", i);
                 }
-            }
-            else {
+            } else {
                 println!("  [{}] Failed to read DSDT bytes", i);
             }
         }
