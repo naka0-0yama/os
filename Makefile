@@ -61,6 +61,7 @@ run: img
 		-machine q35 \
 		-m 1G \
 		-net none \
+		-serial stdio \
 		-d int,cpu_reset -D qemu.log \
 		-no-reboot
 
