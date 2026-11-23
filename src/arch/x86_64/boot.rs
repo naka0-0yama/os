@@ -1,8 +1,10 @@
+use crate::arch::x86_64::acpi::parse_xsdt;
 use crate::console;
 use crate::println;
 const MULTIBOOT2_BOOTLOADER_MAGIC: u32 = 0x36d76289;
 const TAG_TYPE_END: u32 = 0;
 const TAG_TYPE_FRAMEBUFFER: u32 = 8;
+const TAG_TYPE_RSDP: u32 = 15;
 const TAG_TYPE_MEMMMAP: u32 = 17;
 
 #[repr(C)]
@@ -44,6 +46,25 @@ struct MemmapTag {
 }
 
 #[repr(C)]
+struct AcpiTag {
+    tag_type: u32,
+    size: u32,
+}
+
+#[repr(C, packed)]
+struct RsdpDescriptor20 {
+    signature: [u8; 8], // "RSD PTR "
+    checksum: u8,
+    oem_id: [u8; 6],
+    revision: u8,
+    rsdt_address: u32,
+    length: u32,
+    xsdt_address: u64,
+    extended_checksum: u8,
+    reserved: [u8; 3],
+}
+
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct EfiMemoryDesc {
     pub ty: u32,
@@ -64,50 +85,75 @@ pub fn init(magic: u32, multiboot_info_addr: usize) {
     let total_size = unsafe { (*info).total_size as usize };
     let mut offset = 8usize;
 
+    let mut fb_tag_ptr: Option<*const FramebufferTag> = None;
+    let mut memmap_tag_ptr: Option<*const MemmapTag> = None;
+    let mut rsdp_tag_ptr: Option<*const AcpiTag> = None;
+
     while offset < total_size {
         let tag = unsafe { &*((multiboot_info_addr + offset) as *const Tag) };
         if tag.tag_type == TAG_TYPE_END {
             break;
         }
         if tag.tag_type == TAG_TYPE_FRAMEBUFFER {
-            let fb = unsafe { &*((multiboot_info_addr + offset) as *const FramebufferTag) };
-            
-            unsafe {
-                console::init(
-                    fb.address as *mut u32,
-                    fb.width as usize,
-                    fb.height as usize,
-                );
-            }
-            println!(
-                "Framebuffer: {:x}, {}x{}, {} bpp",
-                fb.address, fb.width, fb.height, fb.bpp
-            );
-            break;
-        }
-        if tag.tag_type == TAG_TYPE_MEMMMAP {
-            let efi_mmap_tag = unsafe { &*((multiboot_info_addr + offset) as *const MemmapTag)};
-            let desc_size = efi_mmap_tag.descriptor_size as usize;
-            let header_size = core::mem::size_of::<MemmapTag>();
-            let desc_count = (efi_mmap_tag.size as usize - header_size) / desc_size;
-
-            let mut desc_ptr = (multiboot_info_addr + offset + header_size) as *const EfiMemoryDesc;
-
-            println!("--- UEFI Memory Map ---");
-            for _ in 0..desc_count {
-                let desc = unsafe {*desc_ptr};
-
-                let is_ram = desc.ty == 7;
-                let type_str = if is_ram { "RAM (Conventional)" } else { "Reserved/Other" };
-
-                let length = desc.page_count * 4096;
-                println!(
-                    "Base: 0x{:016x}, Len: 0x{:016x} [{}]",
-                    desc.phys_start, length, type_str
-                );
-                desc_ptr = ((desc_ptr as usize) + desc_size) as *const EfiMemoryDesc;
-            }
+            fb_tag_ptr = Some((multiboot_info_addr + offset) as *const FramebufferTag);
+        } else if tag.tag_type == TAG_TYPE_RSDP {
+            rsdp_tag_ptr = Some((multiboot_info_addr + offset) as *const AcpiTag);
+        } else if tag.tag_type == TAG_TYPE_MEMMMAP {
+            memmap_tag_ptr = Some((multiboot_info_addr + offset) as *const MemmapTag);
         }
         offset += (tag.size as usize + 7) & !7;
+    }
+    if let Some(fb_ptr) = fb_tag_ptr {
+        let fb = unsafe { &*fb_ptr };
+        unsafe {
+            console::init(
+                fb.address as *mut u32,
+                fb.width as usize,
+                fb.height as usize,
+            );
+        }
+        println!(
+            "Framebuffer: {:x}, {}x{}, {} bpp",
+            fb.address, fb.width, fb.height, fb.bpp
+        );
+    }
+    if let Some(mmap_ptr) = memmap_tag_ptr {
+        let efi_mmap_tag = unsafe { &*mmap_ptr };
+        let desc_size = efi_mmap_tag.descriptor_size as usize;
+        let header_size = core::mem::size_of::<MemmapTag>();
+        let desc_count = (efi_mmap_tag.size as usize - header_size) / desc_size;
+
+        let mut desc_ptr = ((mmap_ptr as usize) + header_size) as *const EfiMemoryDesc;
+        println!("Memory Map:");
+        for _ in 0..desc_count {
+            let desc = unsafe { &*desc_ptr };
+            let is_ram = desc.ty == 7;
+            let type_str = if is_ram {
+                "RAM  (Conventional)"
+            } else {
+                "Reserved/Other"
+            };
+            let length = desc.page_count * 4096;
+            println!(
+                "Base: 0x{:016x}, Len: 0x{:016x} [{}]",
+                desc.phys_start, length, type_str
+            );
+            desc_ptr = ((desc_ptr as usize) + desc_size) as *const EfiMemoryDesc;
+        }
+    }
+    if let Some(rsdp_tag_ptr) = rsdp_tag_ptr {
+        let rsdp_desc_ptr = (rsdp_tag_ptr as usize + 8) as *const RsdpDescriptor20;
+
+        unsafe {
+            let rsdp = &*rsdp_desc_ptr;
+            if rsdp.signature == *b"RSD PTR " {
+                println!("ACPI New RSDP found at 0x{:x}", rsdp_desc_ptr as usize);
+
+                // ACPI 2.0以降であれば XSDT アドレスを利用可能
+                let xsdt_addr = rsdp.xsdt_address;
+                println!("XSDT Address: 0x{:016x}", xsdt_addr);
+                parse_xsdt(xsdt_addr);
+            }
+        }
     }
 }

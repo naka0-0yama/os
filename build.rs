@@ -1,6 +1,5 @@
-use std::process::Command;
 use std::env;
-use std::path::Path;
+use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=src/arch/x86_64/boot.asm");
@@ -10,9 +9,8 @@ fn main() {
     let boot_o = format!("{}/boot.o", out_dir);
     let libboot_a = format!("{}/libboot.a", out_dir);
 
-
     let nasm_status = Command::new("nasm")
-        .args(&["-f", "elf64", "src/arch/x86_64/boot.asm", "-o", &boot_o])
+        .args(["-f", "elf64", "src/arch/x86_64/boot.asm", "-o", &boot_o])
         .status()
         .expect("Failed to execute nasm. Is it installed?");
 
@@ -20,9 +18,8 @@ fn main() {
         panic!("nasm compilation failed");
     }
 
-
     let ar_status = Command::new("ar")
-        .args(&["rcs", &libboot_a, &boot_o])
+        .args(["rcs", &libboot_a, &boot_o])
         .status()
         .expect("Failed to execute ar.");
 
