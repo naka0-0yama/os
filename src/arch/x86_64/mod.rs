@@ -1,3 +1,3 @@
 pub mod acpi;
 pub mod boot;
-pub mod serial;
+pub mod idt;

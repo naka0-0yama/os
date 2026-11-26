@@ -104,7 +104,7 @@ static mut CONSOLE: Console = Console::new();
 
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
-    crate::arch::x86_64::serial::write_fmt(args);
+    crate::drivers::serial::COM1.write_fmt(args);
     unsafe {
         core::ptr::addr_of_mut!(CONSOLE)
             .as_mut()
